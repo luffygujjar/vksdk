@@ -21,6 +21,42 @@
 
 - TODO: прямая авторизация
 
+## Права доступа приложения
+
+[![VK][dev-badge]](https://vk.com/dev/permissions)
+
+Права доступа определяют возможность использования токена для работы с тем или
+иным разделом данных. Так, например, для отправки личного сообщения от имени
+пользователя токен должен быть получен с правами `oauth.ScopeUserMessage`.
+
+Обратите внимание, что некоторые права доступа пользователя из списка
+(например, messages) могут быть запрошены только Standalone-приложением — что
+означает необходимость использования Implicit Flow для запроса таких прав.
+
+Если Вы хотите получить права на **Доступ к друзьям** и
+**Доступ к статусам пользователя**, то Ваша битовая маска будет равна:
+
+```go
+scope := oauth.ScopeUserFriends + oauth.ScopeUserStatus // 1026
+```
+
+С помощью метода [account.getAppPermissions](https://vk.com/dev/account.getAppPermissions),
+можно получить битовую маску настроек текущего пользователя в данном приложении.
+
+Если, имея битовую маску 1026, Вы хотите проверить, имеет ли она доступ к
+друзьям — Вы можете сделать 1026 & 2.
+
+```go
+scope, err := vk.AccountGetAppPermissions(nil)
+if err != nil {
+    log.Fatal(err)
+}
+
+if oauth.CheckScope(scope, oauth.ScopeUserFriends, oauth.ScopeUserStatus) {
+    log.Println("Имеется доступ к друзьям и статусу")
+}
+```
+
 ## Ключ доступа пользователя
 
 ### Authorization code flow
@@ -38,7 +74,7 @@
 acf := NewAuthCodeFlowUser(oauth.UserParams{
     ClientID:    123456,
     RedirectURI: "https://example.com/callback",
-    Scope:       123,
+    Scope:       oauth.ScopeUserPhotos + oauth.ScopeUserDocs,
 }, clientSecret)
 u := acf.URL().String()
 ```
@@ -54,10 +90,6 @@ u := acf.URL().String()
 приложение, разрешив доступ к необходимым настройкам, запрошенным при помощи
 параметра scope.
 
-Обратите внимание, что некоторые права доступа пользователя из списка
-(например, messages) могут быть запрошены только Standalone-приложением — что
-означает необходимость использования Implicit Flow для запроса таких прав.
-
 #### Получение access_token
 
 После успешной авторизации приложения браузер пользователя будет перенаправлен
@@ -68,10 +100,10 @@ u := acf.URL().String()
 func callback(w http.ResponseWriter, req *http.Request) {
     t, err := acf.Token(req.URL)
     if err != nil {
-        // Смотри обработку ошибок
+        fmt.Printf("%#v\n", err)
     }
 
-    fmt.Println(
+    fmt.Printf(
         "Токен %s для id%d действует %d секунд",
         t.AccessToken,
         t.UserID,
@@ -95,7 +127,7 @@ func callback(w http.ResponseWriter, req *http.Request) {
 ```go
 u := oauth.ImplicitFlowUser(oauth.UserParams{
     ClientID: 123456,
-    Scope:    123,
+    Scope:    oauth.ScopeUserPhotos + oauth.ScopeUserDocs,
 })
 ```
 
@@ -131,10 +163,10 @@ URL-фрагменте ссылки.
 ```go
 t, err := oauth.NewUserTokenFromURL(u)
 if err != nil {
-    // Смотри обработку ошибок
+    fmt.Printf("%#v\n", err)
 }
 
-fmt.Println(
+fmt.Printf(
     "Токен %s для id%d действует %d секунд",
     t.AccessToken,
     t.UserID,
@@ -163,14 +195,7 @@ fmt.Println(
 
 ## Ключ доступа сообщества
 
-### Implicit flow
-
-[![VK][dev-badge]](https://vk.com/dev/implicit_flow_group)
-
-Используйте Implicit Flow для вызова методов API ВКонтакте непосредственно с
-устройства пользователя.
-
-#### Получение списка администрируемых сообществ
+### Получение списка администрируемых сообществ
 
 Получить ключ доступа сообщества через OAuth может только его администратор.
 Чтобы получить ключи доступа сразу для всех или нескольких сообществ
@@ -184,6 +209,64 @@ fmt.Println(
 Затем используйте все полученные значения или их часть в качестве параметра
 `GroupIDs`.
 
+### Authorization code flow
+
+[![VK][dev-badge]](https://vk.com/dev/authcode_flow_group)
+
+Используйте Authorization Code Flow для вызова методов API ВКонтакте с серверной
+части Вашего приложения. Ключ доступа, полученный таким способом, не привязан к IP-адресу.
+
+#### Сгенерируйте адрес
+
+```go
+acf := NewAuthCodeFlowGroup(oauth.GroupParams{
+    ClientID:    123456,
+    GroupIDs:    []int{1234},
+    RedirectURI: "https://example.com/callback",
+    Scope:       oauth.ScopeGroupPhotos + oauth.ScopeGroupDocs,
+}, clientSecret)
+u := acf.URL().String()
+```
+
+Необходимо перенаправить браузер пользователя по сгенерированному адресу.
+
+Если пользователь не вошел на сайт, то в диалоговом окне ему будет предложено
+ввести свой логин и пароль.
+
+#### Получение access_token
+
+После успешной авторизации приложения браузер пользователя будет перенаправлен
+по адресу redirect_uri, указанному при открытии диалога авторизации. При этом
+код для получения ключа доступа `code` будет передан как GET-параметр.
+
+```go
+func callback(w http.ResponseWriter, req *http.Request) {
+    t, err := acf.Token(req.URL)
+    if err != nil {
+        fmt.Printf("%#v\n", err)
+    }
+
+    for _, groupToken := range t.Groups {
+        fmt.Printf(
+            "Токен %s для club%d действует %d секунд",
+            groupToken.AccessToken,
+            groupToken.GroupID,
+            t.ExpiresIn,
+        )
+    }
+}
+```
+
+`acf.Token(req.URL)` выполнит запрос с вашего сервера, чтобы получить ключ
+доступа.
+
+### Implicit flow
+
+[![VK][dev-badge]](https://vk.com/dev/implicit_flow_group)
+
+Используйте Implicit Flow для вызова методов API ВКонтакте непосредственно с
+устройства пользователя.
+
 #### Сгенерируйте адрес
 
 Перед открытием диалога авторизации рекомендуется убедиться, что пользователь
@@ -193,7 +276,7 @@ fmt.Println(
 u := oauth.ImplicitFlowGroup(oauth.GroupParams{
     ClientID: 123456,
     GroupIDs: []int{1234},
-    Scope:    123,
+    Scope:    oauth.ScopeGroupPhotos + oauth.ScopeGroupDocs,
 })
 ```
 
@@ -226,11 +309,11 @@ URL-фрагменте ссылки.
 ```go
 t, err := oauth.NewGroupTokensFromURL(u)
 if err != nil {
-    fmt.Println(err)
+    fmt.Printf("%#v\n", err)
 }
 
 for _, groupToken := range t.Groups {
-    fmt.Println(
+    fmt.Printf(
         "Токен %s для club%d действует %d секунд",
         groupToken.AccessToken,
         groupToken.GroupID,
@@ -238,12 +321,6 @@ for _, groupToken := range t.Groups {
     )
 }
 ```
-
-### Authorization code flow
-
-[![VK][dev-badge]](https://vk.com/dev/authcode_flow_group)
-
-- TODO: разработать
 
 ## Сервисный ключ доступа
 
@@ -264,11 +341,6 @@ for _, groupToken := range t.Groups {
 от имени Вашего приложения. Сервисный ключ доступа можно использовать только
 для запросов с серверной стороны приложения, его нельзя передавать и хранить
 на клиенте.
-
-- TODO: Проверить следующее:
-
-Для запросов к методам **secure** сервисный ключ привязан к IP-адресу, с
-которого был сгенерирован
 
 [doc-badge]: https://pkg.go.dev/badge/github.com/SevereCloud/vksdk/api/oauth
 [doc]: https://pkg.go.dev/github.com/SevereCloud/vksdk/api/oauth

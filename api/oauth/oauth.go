@@ -14,6 +14,57 @@ const (
 	defaultRedirectURI = "https://oauth.vk.com/blank.html"
 )
 
+// Access Permissions for User Token.
+const (
+	ScopeUserNotify        = 1 << 0
+	ScopeUserFriends       = 1 << 1
+	ScopeUserPhotos        = 1 << 2
+	ScopeUserAudio         = 1 << 3
+	ScopeUserVideo         = 1 << 4
+	ScopeUserStories       = 1 << 6
+	ScopeUserPages         = 1 << 7
+	ScopeUserMenu          = 1 << 8
+	ScopeUserWallmenu      = 1 << 9
+	ScopeUserStatus        = 1 << 10
+	ScopeUserNotes         = 1 << 11
+	ScopeUserMessages      = 1 << 12
+	ScopeUserWall          = 1 << 13
+	ScopeUserAds           = 1 << 15
+	ScopeUserOffline       = 1 << 16
+	ScopeUserDocs          = 1 << 17
+	ScopeUserGroups        = 1 << 18
+	ScopeUserNotifications = 1 << 19
+	ScopeUserStats         = 1 << 20
+	ScopeUserEmail         = 1 << 22
+	ScopeUserAdsweb        = 1 << 23
+	ScopeUserLeads         = 1 << 24
+	ScopeUserGroupMessages = 1 << 25
+	ScopeUserExchange      = 1 << 26
+	ScopeUserMarket        = 1 << 27
+	ScopeUserPhone         = 1 << 28
+)
+
+// Access Permissions for Community Token.
+const (
+	ScopeGroupStories   = 1 << 0
+	ScopeGroupPhotos    = 1 << 2
+	ScopeGroupAppWidget = 1 << 6
+	ScopeGroupMessages  = 1 << 12
+	ScopeGroupDocs      = 1 << 17
+	ScopeGroupManage    = 1 << 18
+)
+
+// CheckScope ...
+func CheckScope(scope int, permissions ...int) bool {
+	for i := 0; i < len(permissions); i++ {
+		if scope&permissions[i] != permissions[i] {
+			return false
+		}
+	}
+
+	return true
+}
+
 // Display sets authorization page appearance.
 type Display string
 

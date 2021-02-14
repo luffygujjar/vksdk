@@ -3,6 +3,7 @@ package api // import "github.com/SevereCloud/vksdk/v2/api"
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"mime/multipart"
@@ -39,6 +40,45 @@ func (vk *VK) UploadFile(url string, file io.Reader, fieldname, filename string)
 	return
 }
 
+
+// UploadFile uploading file.
+func (vk *VK) UploadFiles(url string, files []io.Reader) (bodyContent []byte, err error) {
+
+	total := len(files)
+	if total < 1 && total > 5 {
+		return nil, fmt.Errorf("no more than 5 files allowed")
+	}
+
+	body := new(bytes.Buffer)
+	writer := multipart.NewWriter(body)
+
+	for i, file := range files {
+		part, err := writer.CreateFormFile(fmt.Sprintf("file%d", i), fmt.Sprintf("file%d.jpeg", i))
+		if err != nil {
+			return nil, err
+		}
+
+		_, err = io.Copy(part, file)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	contentType := writer.FormDataContentType()
+	_ = writer.Close()
+
+	resp, err := vk.Client.Post(url, contentType, body)
+	if err != nil {
+		return
+	}
+	defer resp.Body.Close()
+
+	bodyContent, err = ioutil.ReadAll(resp.Body)
+
+	return
+}
+
+
 // uploadPhoto uploading Photos into Album.
 //
 // Supported formats: JPG, PNG, GIF.
@@ -71,6 +111,49 @@ func (vk *VK) uploadPhoto(params Params, file io.Reader) (response PhotosSaveRes
 		"album_id":    params["album_id"],
 		"group_id":    params["group_id"],
 	})
+
+	return
+}
+
+// UploadPhotos uploading Photos into User Album.
+//
+// Supported formats: JPG, PNG, GIF.
+//
+// Limits: width+height not more than 14000 px, file size up to 50 Mb,
+// aspect ratio of at least 1:20.
+func (vk *VK) UploadPhotos(albumID int, files []io.Reader) (response PhotosSaveResponse, err error) {
+
+	params := Params{
+		"album_id": albumID,
+	}
+
+	uploadServer, err := vk.PhotosGetUploadServer(params)
+	if err != nil {
+		return
+	}
+
+	bodyContent, err := vk.UploadFiles(uploadServer.UploadURL, files)
+	if err != nil {
+		return
+	}
+
+	var handler object.PhotosPhotoUploadResponse
+
+	err = json.Unmarshal(bodyContent, &handler)
+	if err != nil {
+		return
+	}
+
+	response, err = vk.PhotosSave(Params{
+		"server":      handler.Server,
+		"photos_list": handler.PhotosList,
+		"aid":         handler.AID,
+		"hash":        handler.Hash,
+		"album_id":    params["album_id"],
+		"group_id":    params["group_id"],
+	})
+
+	return
 
 	return
 }
